@@ -33,7 +33,7 @@ class Snake {
 //        Point from = new Point(screenWidth / 2, screenHeight / 2);
 //        Point to = new Point(screenWidth / 2 - snakeLength, screenHeight / 2);
 
-        SnakePart firstSnakePart = createNewHeadHorizontal(screenWidth / 2, screenHeight / 2, HORIZONTAL, 1);
+        SnakePart firstSnakePart = createNewSnakePart(screenWidth / 2, screenHeight / 2, HORIZONTAL, 1);
 
         this.snakeBody = new LinkedList<>();
         this.snakeBody.add(firstSnakePart);
@@ -151,11 +151,24 @@ class Snake {
         }
     }
 
+    void increaseSnakeLength() {
+        switch (getTail().getOrientation()) {
+            case HORIZONTAL:
+                snakeBody.add(createNewSnakePart(getTail().getTo().x, getTail().getTo().y,
+                    SnakePart.Orientation.VERTICAL, getTail().direction * -1));
+                break;
+            case VERTICAL:
+                snakeBody.add(createNewSnakePart(getTail().getTo().x, getTail().getTo().y,
+                    SnakePart.Orientation.HORIZONTAL, getTail().direction * -1));
+                break;
+        }
+    }
+
     private SnakePart createNewHead(Point from, Point to, SnakePart.Orientation orientation, int direction) {
         return new SnakePart(from, to, orientation, direction);
     }
 
-    private SnakePart createNewHeadHorizontal(int fromX, int fromY, SnakePart.Orientation orientation, int direction) {
+    private SnakePart createNewSnakePart(int fromX, int fromY, SnakePart.Orientation orientation, int direction) {
         Point from = new Point(fromX, fromY);
         Point to = new Point(fromX - (snakeLength * direction), fromY);
         return new SnakePart(from, to, orientation, direction);
@@ -217,6 +230,19 @@ class Snake {
 
     }
 
+    // Taken from https://gist.github.com/coleww/9403691
+
+    /**
+     * @param x1 line 1 from x coordinate
+     * @param y1 line 1 from y coordinate
+     * @param x2 line 1 to x coordinate
+     * @param y2 line 1 to y coordinate
+     * @param x3 line 2 from x coordinate
+     * @param y3 line 2 from y coordinate
+     * @param x4 line 2 to x coordinate
+     * @param y4 line 2 to y coordinate
+     * @return true if intersects else false
+     */
     private boolean intersects(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) {
         float bx = x2 - x1;
         float by = y2 - y1;

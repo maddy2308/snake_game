@@ -20,6 +20,7 @@ import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -27,11 +28,11 @@ import java.util.Random;
  * Created by maddy on 4/13/19.
  */
 
-public class GameView extends SurfaceView implements SurfaceHolder.Callback{
+public class GameView extends SurfaceView implements SurfaceHolder.Callback {
 
     private static final String TAG = "CannonView"; // for logging errors
 
-    public static final double TARGET_WIDTH_PERCENT = 1.0 / 40;
+    public static final double TARGET_WIDTH_PERCENT = 1.0 / 50;
     public static final double TARGET_LENGTH_PERCENT = 6.0 / 20;
 
     public static final double TARGET_MIN_SPEED_PERCENT = 4.0 / 20;
@@ -39,6 +40,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback{
 
     // text size 1/18 of screen width
     public static final double TEXT_SIZE_PERCENT = 1.0 / 18;
+    private int score = 0;
 
     private GameThread gameThread; // controls the game loop
     private Activity activity = null; // to display Game Over dialog in GUI thread
@@ -54,8 +56,6 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback{
 
     // variables for the game loop and tracking statistics
     private boolean restartNewGame; // is the game over?
-    private double timeLeft; // time remaining in seconds
-    private double totalElapsedTime; // elapsed seconds
 
     // constants and variables for managing sounds
     public static final int EATING_SOUND_ID = 0;
@@ -92,8 +92,9 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback{
         soundPool = builder.build();
 
         textPaint = new Paint();
+        textPaint.setColor(Color.BLUE);
         backgroundPaint = new Paint();
-        backgroundPaint.setColor(Color.GREEN);
+        backgroundPaint.setColor(Color.BLACK);
 
     }
 
@@ -149,23 +150,26 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback{
             try {
                 gameThread.join(); // wait for cannonThread to finish
                 retry = false;
-            }
-            catch (InterruptedException e) {
+            } catch (InterruptedException e) {
                 Log.e(TAG, "Thread interrupted", e);
             }
         }
     }
 
     private void newGame() {
+        score = 0;
         Random random = new Random(); // for determining random velocities
-        double velocity = (screenWidth > screenHeight ? screenHeight : screenWidth)*
+        double velocity = (screenWidth > screenHeight ? screenHeight : screenWidth) *
             (random.nextDouble() * (TARGET_MAX_SPEED_PERCENT - TARGET_MIN_SPEED_PERCENT) + TARGET_MIN_SPEED_PERCENT);
         snake = Snake.createSnake(
-            (int)(TARGET_WIDTH_PERCENT * getScreenHeight()),
-            (int)(TARGET_LENGTH_PERCENT * getScreenWidth()),
+            (int) (TARGET_WIDTH_PERCENT * getScreenHeight()),
+            (int) (TARGET_LENGTH_PERCENT * getScreenWidth()),
             velocity,
-            Color.BLACK,
+            Color.GREEN,
             this);
+
+        foodList = new ArrayList<>();
+        createFood();
 
         if (restartNewGame) { // start a new game after the last game ended
             restartNewGame = false; // the game is not over
@@ -174,9 +178,9 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback{
         }
     }
 
-    private class GameThread extends Thread{
+    private class GameThread extends Thread {
 
-        private SurfaceHolder surfaceHolder; // for manipulating canvas
+        private final SurfaceHolder surfaceHolder; // for manipulating canvas
         private boolean threadIsRunning = true; // running by default
 
         // initializes the surface holder
@@ -195,17 +199,21 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback{
         public void run() {
             Canvas canvas = null; // used for drawing
             long previousFrameTime = System.currentTimeMillis();
-
+            double totalElapsedTime = 0; // elapsed seconds before we create food;
             while (threadIsRunning) {
                 try {
                     // get Canvas for exclusive drawing from this thread
                     canvas = surfaceHolder.lockCanvas();
 
                     // lock the surfaceHolder for drawing
-                    synchronized(surfaceHolder) {
+                    synchronized (surfaceHolder) {
                         long currentTime = System.currentTimeMillis();
                         double elapsedTimeMS = currentTime - previousFrameTime;
                         totalElapsedTime += elapsedTimeMS / 1000.0;
+                        if (totalElapsedTime > 5) {
+                            createFood();
+                            totalElapsedTime = 0;
+                        }
                         updatePositions(elapsedTimeMS); // update game state
                         testForCollisions(); // test for GameElement collisions
                         drawGameElements(canvas); // draw using the canvas
@@ -229,7 +237,23 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback{
         if (isGameUp) {
             showGameOverDialog(R.string.lose);
             restartNewGame = true;
+        } else if (testIfCollideWithFood()) {
+            snake.increaseSnakeLength();
         }
+    }
+
+    private boolean testIfCollideWithFood() {
+        int headX = snake.getHead().getFrom().x;
+        int headY = snake.getHead().getFrom().y;
+
+        for (Food food: foodList) {
+            if (food.isEaten(headX, headY)) {
+                foodList.remove(food);
+                score += 10;
+                return true;
+            }
+        }
+        return false;
     }
 
     private void updatePositions(double elapsedTimeMS) {
@@ -244,9 +268,12 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback{
 
         snake.draw(canvas); // draw the cannon
 
-        // draw all of the Targets
-//        for (GameElement target : targets)
-//            target.draw(canvas);
+        // draw all of the Food
+        for (Food food : foodList) {
+            food.draw(canvas);
+        }
+
+        canvas.drawText(getResources().getString(R.string.score, score), 50, 100, textPaint);
     }
 
     // called when the user touches the screen in this activity
@@ -317,5 +344,18 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback{
     public void releaseResources() {
         soundPool.release(); // release all resources used by the SoundPool
         soundPool = null;
+    }
+
+    private void createFood() {
+        int radius = (int) (screenWidth * TARGET_WIDTH_PERCENT);
+        int maxSpaceAvailableForFoodX = screenWidth - 2 * radius;
+        int maxSpaceAvailableForFoodY = screenHeight - 2 * radius;
+
+        int fromX = (int) (Math.random() * (maxSpaceAvailableForFoodX - 2 * radius) + radius);
+        int fromY = (int) (Math.random() * (maxSpaceAvailableForFoodY - 2 * radius) + radius);
+
+        if (foodList.size() < 5) {
+            foodList.add(new Food(fromX, fromY, radius));
+        }
     }
 }

@@ -2,4 +2,5 @@
     <string name="app_name">Snake Game</string>
     <string name="reset_game">Reset Game</string>
     <string name="lose">Game Up!</string>
+    <string name="score">Score: %d </string>
 </resources>
